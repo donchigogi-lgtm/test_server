@@ -5,6 +5,20 @@ const ipStats = {};
 // 실시간 최근 요청 로그 (최신 50개 유지)
 const recentLogs = [];
 
+// 한국 시간(KST)으로 변환하는 함수
+function getKoreanTime() {
+  return new Intl.DateTimeFormat('ko-KR', {
+    timeZone: 'Asia/Seoul',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: true
+  }).format(new Date());
+}
+
 const server = http.createServer((req, res) => {
   // 실제 클라이언트 IP 추출
   const rawIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'Unknown';
@@ -12,7 +26,7 @@ const server = http.createServer((req, res) => {
   const requestUrl = req.url;
   const method = req.method;
   const userAgent = req.headers['user-agent'] || 'Unknown';
-  const now = new Date().toLocaleTimeString('ko-KR');
+  const now = getKoreanTime(); // 한국 시간 적용!
 
   // favicon 요청은 통계에서 제외
   if (requestUrl === '/favicon.ico') {
@@ -43,7 +57,7 @@ const server = http.createServer((req, res) => {
           <td style="padding: 8px; font-family: monospace; font-size: 13px;"><b>${ip}</b></td>
           <td style="padding: 8px; text-align: right; font-weight: bold; color: #2563eb;">${data.count.toLocaleString()}회</td>
           <td style="padding: 8px; text-align: right; font-size: 12px; color: #4b5563;">${(data.bytesOut / 1024).toFixed(1)} KB</td>
-          <td style="padding: 8px; text-align: center; font-size: 11px; color: #6b7280;">${data.lastSeen}</td>
+          <td style="padding: 8px; text-align: center; font-size: 11px; color: #6b7280; white-space: nowrap;">${data.lastSeen}</td>
         </tr>
       `;
     }).join('');
@@ -51,7 +65,7 @@ const server = http.createServer((req, res) => {
     // 2. 오른쪽: 최근 실시간 URL 접근 로그 생성
     const rightRows = recentLogs.map(log => `
       <tr style="border-bottom: 1px solid #e5e7eb;">
-        <td style="padding: 8px; font-size: 12px; color: #6b7280; white-space: nowrap;">${log.time}</td>
+        <td style="padding: 8px; font-size: 11px; color: #6b7280; white-space: nowrap;">${log.time}</td>
         <td style="padding: 8px; font-family: monospace; font-size: 12px;">${log.ip}</td>
         <td style="padding: 8px; text-align: center;"><span style="background: #e0e7ff; color: #3730a3; padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: bold;">${log.method}</span></td>
         <td style="padding: 8px; font-family: monospace; font-size: 13px; color: #059669; word-break: break-all;"><b>${log.url}</b></td>
@@ -81,7 +95,7 @@ const server = http.createServer((req, res) => {
       </head>
       <body>
         <div class="header">
-          <h2 style="margin: 0;">📊 웹서버 트래픽 모니터링 대시보드</h2>
+          <h2 style="margin: 0;">📊 웹서버 트래픽 모니터링 대시보드 (KST 기준)</h2>
           <span style="font-size: 13px; color: #6b7280;">⏱ 5초마다 자동 갱신됨</span>
         </div>
 
@@ -100,7 +114,7 @@ const server = http.createServer((req, res) => {
                     <th>접속 IP</th>
                     <th style="text-align: right;">요청수</th>
                     <th style="text-align: right;">전송량</th>
-                    <th style="text-align: center;">최근 접속</th>
+                    <th style="text-align: center;">최근 접속 (한국시간)</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -120,7 +134,7 @@ const server = http.createServer((req, res) => {
               <table>
                 <thead>
                   <tr>
-                    <th>시간</th>
+                    <th>접속 시간 (한국시간)</th>
                     <th>IP</th>
                     <th style="text-align: center;">방식</th>
                     <th>접근 URL</th>
