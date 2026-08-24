@@ -1,5 +1,11 @@
 const http = require('http');
 
+// ----------------------------------------------------
+// [보안 설정] 관리자 페이지(/stats) 로그인 계정 정보
+// ----------------------------------------------------
+const ADMIN_USER = '82214913';       // 원하는 아이디로 변경 가능
+const ADMIN_PASS = 'qkrwldnjs00@@';        // 원하는 비밀번호로 변경 가능
+
 // IP별 통계 데이터
 const ipStats = {};
 // 실시간 최근 요청 로그 (최신 50개 유지)
@@ -48,9 +54,40 @@ const server = http.createServer((req, res) => {
   }
 
   // ----------------------------------------------------
-  // 모니터링 대시보드 화면 (/stats)
+  // 모니터링 대시보드 화면 (/stats) - Basic Auth 인증 적용
   // ----------------------------------------------------
   if (requestUrl === '/stats') {
+    const authHeader = req.headers['authorization'];
+
+    if (authHeader) {
+      // "Basic base64문자열" 파싱
+      const [type, credentials] = authHeader.split(' ');
+      if (type === 'Basic' && credentials) {
+        const decoded = Buffer.from(credentials, 'base64').toString('utf-8');
+        const [user, pass] = decoded.split(':');
+
+        // 아이디와 비밀번호 일치 확인
+        if (user === ADMIN_USER && pass === ADMIN_PASS) {
+          // 인증 성공 -> 아래 대시보드 렌더링 로직으로 계속 진행
+        } else {
+          // 비밀번호 틀림
+          res.writeHead(401, {
+            'WWW-Authenticate': 'Basic realm="Admin Dashboard"',
+            'Content-Type': 'text/html; charset=utf-8'
+          });
+          return res.end('<h1>401 권한 없음: 아이디 또는 비밀번호가 틀렸습니다.</h1>');
+        }
+      }
+    } else {
+      // 인증 헤더 없음 -> 브라우저 로그인 창 띄우기 요청 (401)
+      res.writeHead(401, {
+        'WWW-Authenticate': 'Basic realm="Admin Dashboard"',
+        'Content-Type': 'text/html; charset=utf-8'
+      });
+      return res.end('<h1>401 로그인 필요: 관리자 인증을 완료해주세요.</h1>');
+    }
+
+    // --- 인증 통과된 관리자만 볼 수 있는 대시보드 ---
     res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
 
     // 1. 왼쪽: 총 전송량(합계) 기준 내림차순 정렬 상위 Top 50 추출
@@ -112,7 +149,7 @@ const server = http.createServer((req, res) => {
       <body>
         <div class="header">
           <h2 style="margin: 0;">📊 웹서버 트래픽 모니터링 대시보드 (24H KST)</h2>
-          <span style="font-size: 13px; color: #6b7280;">⏱ 5초마다 자동 갱신됨</span>
+          <span style="font-size: 13px; color: #6b7280;">🔒 관리자 모드 | ⏱ 5초마다 자동 갱신됨</span>
         </div>
 
         <div class="container">
@@ -181,7 +218,7 @@ const server = http.createServer((req, res) => {
     const responseBody = `<h1>요청 접수 완료!</h1><p>접근 경로: <b>${requestUrl}</b></p>`;
     const outBytes = Buffer.byteLength(responseBody, 'utf8');
 
-    // 1. IP 통계 갱신 (요청량, 응답량 누적)
+    // 1. IP 통계 갱신
     if (!ipStats[clientIp]) {
       ipStats[clientIp] = { count: 0, bytesIn: 0, bytesOut: 0, lastSeen: '' };
     }
