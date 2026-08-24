@@ -4,7 +4,7 @@ const http = require('http');
 // [보안 설정] 관리자 페이지(/stats) 로그인 계정 정보
 // ----------------------------------------------------
 const ADMIN_USER = '82214913';       // 원하는 아이디로 변경 가능
-const ADMIN_PASS = 'qkrwldnjs00@@';        // 원하는 비밀번호로 변경 가능
+const ADMIN_PASS = '82214913';        // 원하는 비밀번호로 변경 가능
 
 // IP별 통계 데이터
 const ipStats = {};
