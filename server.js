@@ -1,16 +1,27 @@
 const http = require('http');
 
 const server = http.createServer((req, res) => {
-  // 1. 요청 들어올 때마다 접속 로그 찍기
-  console.log(`[로그] ${new Date().toISOString()} | 요청 방식: ${req.method} | 주소: ${req.url} | IP: ${req.headers['x-forwarded-for'] || req.socket.remoteAddress}`);
-  
-  // 2. 접속자 브라우저에 보여줄 응답
-  res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-  res.end('<h1>마! 서버 살아있다!</h1><p>접속 성공했다 동생아.</p>');
+  let inBytes = 0;
+
+  // 1. 들어온 요청(Inbound) 바이트 계산
+  req.on('data', chunk => {
+    inBytes += chunk.length;
+  });
+
+  req.on('end', () => {
+    const responseBody = '<h1>마! 트래픽 체크 잘 된다!</h1>';
+    const outBytes = Buffer.byteLength(responseBody, 'utf8');
+
+    // 2. 로그에 송수신 바이트 크기 출력
+    console.log(`[트래픽] In: ${inBytes} bytes | Out: ${outBytes} bytes | URL: ${req.url}`);
+
+    res.writeHead(200, {
+      'Content-Type': 'text/html; charset=utf-8',
+      'Content-Length': outBytes
+    });
+    res.end(responseBody);
+  });
 });
 
-// Render가 지정해주는 포트로 서버 열기
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => {
-  console.log(`서버가 ${PORT}번 포트에서 준비 완료됐다!`);
-});
+server.listen(PORT, () => console.log(`서버 가동: ${PORT}`));
