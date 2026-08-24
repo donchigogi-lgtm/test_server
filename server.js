@@ -5,7 +5,7 @@ const ipStats = {};
 // 실시간 최근 요청 로그 (최신 50개 유지)
 const recentLogs = [];
 
-// 한국 시간(KST) 24시간 포맷 변환 함수: YYYY. MM. DD. HH:mm:ss
+// 한국 시간(KST) 24시간 포맷 변환: YYYY. MM. DD. HH:mm:ss
 function getKoreanTime() {
   const parts = new Intl.DateTimeFormat('ko-KR', {
     timeZone: 'Asia/Seoul',
@@ -20,10 +20,16 @@ function getKoreanTime() {
 
   const map = {};
   parts.forEach(p => { map[p.type] = p.value; });
-
-  // 24시가 24로 표기되는 경우 00으로 보정
   const hour = map.hour === '24' ? '00' : map.hour;
   return `${map.year}. ${map.month}. ${map.day}. ${hour}:${map.minute}:${map.second}`;
+}
+
+// 바이트 단위 포맷팅 함수 (B -> KB -> MB)
+function formatBytes(bytes) {
+  if (bytes === 0) return '0 B';
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+  return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
 }
 
 const server = http.createServer((req, res) => {
@@ -33,7 +39,7 @@ const server = http.createServer((req, res) => {
   const requestUrl = req.url;
   const method = req.method;
   const userAgent = req.headers['user-agent'] || 'Unknown';
-  const now = getKoreanTime(); // 24시간제 한국 시간 적용
+  const now = getKoreanTime();
 
   // favicon 요청은 통계에서 제외
   if (requestUrl === '/favicon.ico') {
@@ -47,12 +53,13 @@ const server = http.createServer((req, res) => {
   if (requestUrl === '/stats') {
     res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
 
-    // 1. 왼쪽: 트래픽 상위 Top 50 IP 추출
+    // 1. 왼쪽: 총 전송량(합계) 기준 내림차순 정렬 상위 Top 50 추출
     const top50Ip = Object.entries(ipStats)
-      .sort((a, b) => b[1].count - a[1].count)
+      .sort((a, b) => (b[1].bytesIn + b[1].bytesOut) - (a[1].bytesIn + a[1].bytesOut))
       .slice(0, 50);
 
     const leftRows = top50Ip.map(([ip, data], index) => {
+      const totalBytes = data.bytesIn + data.bytesOut;
       let rankBadge = `<span style="font-weight:bold; color:#555;">#${index + 1}</span>`;
       if (index === 0) rankBadge = `<span style="color:#d97706; font-weight:bold;">🥇 1위</span>`;
       if (index === 1) rankBadge = `<span style="color:#64748b; font-weight:bold;">🥈 2위</span>`;
@@ -63,7 +70,9 @@ const server = http.createServer((req, res) => {
           <td style="padding: 8px; text-align: center;">${rankBadge}</td>
           <td style="padding: 8px; font-family: monospace; font-size: 13px;"><b>${ip}</b></td>
           <td style="padding: 8px; text-align: right; font-weight: bold; color: #2563eb;">${data.count.toLocaleString()}회</td>
-          <td style="padding: 8px; text-align: right; font-size: 12px; color: #4b5563;">${(data.bytesOut / 1024).toFixed(1)} KB</td>
+          <td style="padding: 8px; text-align: right; font-size: 12px; color: #059669;">${formatBytes(data.bytesIn)}</td>
+          <td style="padding: 8px; text-align: right; font-size: 12px; color: #d97706;">${formatBytes(data.bytesOut)}</td>
+          <td style="padding: 8px; text-align: right; font-size: 12px; font-weight: bold; color: #dc2626;">${formatBytes(totalBytes)}</td>
           <td style="padding: 8px; text-align: center; font-size: 11px; font-family: monospace; color: #6b7280; white-space: nowrap;">${data.lastSeen}</td>
         </tr>
       `;
@@ -108,7 +117,7 @@ const server = http.createServer((req, res) => {
 
         <div class="container">
           <!-- 왼쪽 패널: 트래픽 Top 50 -->
-          <div class="panel">
+          <div class="panel" style="flex: 1.2;">
             <div class="panel-title">
               <span>🔥 트래픽 상위 Top 50 IP</span>
               <span style="font-size: 12px; color: #6b7280; font-weight: normal;">총 고유 IP: ${Object.keys(ipStats).length}개</span>
@@ -117,22 +126,24 @@ const server = http.createServer((req, res) => {
               <table>
                 <thead>
                   <tr>
-                    <th style="width: 50px; text-align: center;">순위</th>
+                    <th style="width: 45px; text-align: center;">순위</th>
                     <th>접속 IP</th>
                     <th style="text-align: right;">요청수</th>
-                    <th style="text-align: right;">전송량</th>
+                    <th style="text-align: right; color: #059669;">요청량(In)</th>
+                    <th style="text-align: right; color: #d97706;">응답량(Out)</th>
+                    <th style="text-align: right; color: #dc2626;">전송량(총합)</th>
                     <th style="text-align: center;">최근 접속</th>
                   </tr>
                 </thead>
                 <tbody>
-                  ${leftRows || '<tr><td colspan="5" style="text-align: center; padding: 30px; color: #9ca3af;">아직 기록된 트래픽이 없다!</td></tr>'}
+                  ${leftRows || '<tr><td colspan="7" style="text-align: center; padding: 30px; color: #9ca3af;">아직 기록된 트래픽이 없다!</td></tr>'}
                 </tbody>
               </table>
             </div>
           </div>
 
           <!-- 오른쪽 패널: 실시간 요청 & 접근 URL -->
-          <div class="panel">
+          <div class="panel" style="flex: 0.8;">
             <div class="panel-title">
               <span>⚡ 실시간 접근 로그 & URL 정보</span>
               <span style="font-size: 12px; color: #6b7280; font-weight: normal;">최신 50건</span>
@@ -170,7 +181,7 @@ const server = http.createServer((req, res) => {
     const responseBody = `<h1>요청 접수 완료!</h1><p>접근 경로: <b>${requestUrl}</b></p>`;
     const outBytes = Buffer.byteLength(responseBody, 'utf8');
 
-    // 1. IP 통계 갱신
+    // 1. IP 통계 갱신 (요청량, 응답량 누적)
     if (!ipStats[clientIp]) {
       ipStats[clientIp] = { count: 0, bytesIn: 0, bytesOut: 0, lastSeen: '' };
     }
