@@ -1,27 +1,43 @@
 const http = require('http');
 
-const server = http.createServer((req, res) => {
-  let inBytes = 0;
+// IP별 통계 저장용 객체
+const stats = {};
 
-  // 1. 들어온 요청(Inbound) 바이트 계산
+const server = http.createServer((req, res) => {
+  // 실제 접속자 IP 추출
+  const ip = req.headers['x-forwarded-for']?.split(',')[0] || req.socket.remoteAddress || 'unknown';
+
+  let inBytes = 0;
   req.on('data', chunk => {
     inBytes += chunk.length;
   });
 
   req.on('end', () => {
-    const responseBody = '<h1>마! 트래픽 체크 잘 된다!</h1>';
-    const outBytes = Buffer.byteLength(responseBody, 'utf8');
+    // 통계 페이지 확인용 엔드포인트 (/stats)
+    if (req.url === '/stats') {
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+      return res.end(JSON.stringify(stats, null, 2));
+    }
 
-    // 2. 로그에 송수신 바이트 크기 출력
-    console.log(`[트래픽] In: ${inBytes} bytes | Out: ${outBytes} bytes | URL: ${req.url}`);
+    const resText = 'OK';
+    const outBytes = Buffer.byteLength(resText, 'utf8');
 
-    res.writeHead(200, {
-      'Content-Type': 'text/html; charset=utf-8',
-      'Content-Length': outBytes
-    });
-    res.end(responseBody);
+    // IP별 데이터 누적
+    if (!stats[ip]) {
+      stats[ip] = { requests: 0, inboundBytes: 0, outboundBytes: 0 };
+    }
+    stats[ip].requests += 1;
+    stats[ip].inboundBytes += inBytes;
+    stats[ip].outboundBytes += outBytes;
+
+    // 콘솔에 요약 출력
+    console.log(`[요청] IP: ${ip} | 누적 요청: ${stats[ip].requests}회 | 총 수신: ${stats[ip].inboundBytes}B`);
+
+    res.writeHead(200, { 'Content-Type': 'text/plain', 'Content-Length': outBytes });
+    res.end(resText);
   });
 });
 
-const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => console.log(`서버 가동: ${PORT}`));
+server.listen(3000, () => {
+  console.log('테스트 서버 실행 중: http://localhost:3000');
+});
